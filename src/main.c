@@ -13,10 +13,9 @@
 // Project includes
 #include "cpu.h"
 
-void main(void)
-{
-	// Clear the CPU's RAM
-	clearRAM();
+void main(void) {
+	// Set up CPU
+	cpuInit();
 
 	// Main loop
 	while(true) {
