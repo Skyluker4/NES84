@@ -5,11 +5,8 @@
 #include <tice.h>
 #include <keypadc.h>
 
-// Project includes
-#include "cpu.h"
-
 // Functions
-void clearRAM();
+void cpuInit();
 void cpuOp();
 
 #endif
