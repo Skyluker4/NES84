@@ -1,0 +1,219 @@
+; Zilog eZ80 ANSI C Compiler Release 3.4
+; -optsize -noreduceopt -nomodsect -peephole -globalopt
+; -localcse -const=ROM 
+	FILE	"SRC\CPU.C"
+	.assume ADL=1
+	SEGMENT BSS
+_RAM:
+	DS	2048
+;    1	// System includes
+;    2	#include <tice.h>
+;    3	#include <keypadc.h>
+;    4	
+;    5	// Project includes
+;    6	#include "cpu.h"
+;    7	
+;    8	// Create RAM
+;    9	uint8_t RAM[0x800];
+	SEGMENT CODE
+;   10	
+;   11	int clearRAM(){
+_clearRAM:
+	LD	HL,-6
+	CALL	__frameset
+;   12		int c;
+;   13		for (c = 0; c < 0x800; ++c) {
+	LD	BC,0
+	LD	(IX+-3),BC
+	JR	L_6
+L_4:
+;   14			RAM[c] = (c & 4) ? 0xFF : 0x00;
+	LD	A,(IX+-3)
+	AND	A,4
+	UEXT	HL
+	LD	L,A
+	CALL	__icmpzero
+	JR	Z,L_2
+	LD	BC,255
+	LD	(IX+-6),BC
+	JR	L_3
+L_2:
+	LD	BC,0
+	LD	(IX+-6),BC
+L_3:
+	LD	BC,_RAM
+	LD	HL,(IX+-3)
+	ADD	HL,BC
+	LD	A,(IX+-6)
+	LD	(HL),A
+	LD	BC,(IX+-3)
+	INC	BC
+	LD	(IX+-3),BC
+;   15		}
+L_6:
+	LD	BC,2048
+	LD	HL,(IX+-3)
+	OR	A,A
+	SBC	HL,BC
+	CALL	__setflag
+	JP	M,L_4
+	OR	A,A
+;   16		return 0;
+	SBC	HL,HL
+;   17	}
+	LD	SP,IX
+	POP	IX
+	RET	
+
+
+;**************************** _clearRAM ***************************
+;Name                         Addr/Register   Size   Type
+;_RAM                                STATIC   2048   variable
+;temp0                                 IX-6      3   variable
+;c                                     IX-3      3   variable
+
+
+; Stack Frame Size: 12 (bytes)
+;       Spill Code: 0 (instruction)
+
+
+	SEGMENT DATA
+_A:
+	DB	0
+_X:
+	DB	0
+_Y:
+	DB	0
+_S:
+	DB	0
+_PC:
+	DW	0
+_reset:
+	DB	1
+_nmi:
+	DB	0
+_nmi_edge_detected:
+	DB	0
+_intr:
+	DB	0
+;   18	
+;   19	// Create registers
+;   20	uint8_t A = 0, X = 0, Y = 0, S = 0;
+;   21	uint16_t PC = 0;
+;   22	struct flags {
+;   23		uint8_t carry:1;
+;   24		uint8_t zero:1;
+;   25		uint8_t interrupt:1;
+;   26		uint8_t decimal:1; // Probably can remove decimal flag
+;   27		uint8_t overflow:1;
+;   28		uint8_t negative:1;
+;   29	};
+;   30	
+;   31	// Console status
+;   32	bool reset = true, nmi = false, nmi_edge_detected = false, intr = false;
+	SEGMENT CODE
+;   33	
+;   34	void cpuOp() {
+_cpuOp:
+	LD	HL,-4
+	CALL	__frameset
+;   35		struct flags P;
+;   36	    uint8_t op = RAM[PC++];
+	LD	BC,(_PC)
+	INC	BC
+	LD	DE,(_PC)
+	LD	HL,_PC
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B
+	LD	BC,DE
+	CALL	__stoiu
+	LD	BC,_RAM
+	ADD	HL,BC
+	LD	A,(HL)
+	LD	(IX+-1),A
+;   37	
+;   38	    switch(op){
+	UEXT	HL
+	LD	L,A
+	CALL	__case8
+L__3:
+	DW	2
+	DB	101
+	DW24	L_15	
+
+	DB	105
+	DW24	L_10	
+
+	DW24	L_14	
+
+;   39	        case 0x69:
+L_10:
+;   40	            A = A + (bool)P.carry;
+	LD	HL,(IX+-4)
+	LD	A,23
+	CALL	__ishru_b
+	LD	A,L
+	LD	BC,(_A)
+	ADD	A,C
+;   41	            if(A % 2 == 1) P.carry = true;
+	UEXT	HL
+	LD	L,A
+	LD	BC,2
+	CALL	__irems
+	OR	A,A
+	LD	BC,1
+	SBC	HL,BC
+	LD	(_A),A
+	JR	NZ,L_16
+	LEA	HL,IX+-2
+	SET	7,(HL)
+;   42	            break;
+;   43	        case 0x65:
+;   44	            break;
+;   45	        default:
+L_14:
+;   46	            // Error in memory/ROM
+;   47	            return;
+;   48	    }
+L_15:
+;   49		return;
+L_16:
+	LD	SP,IX
+	POP	IX
+	RET	
+
+
+;**************************** _cpuOp ***************************
+;Name                         Addr/Register   Size   Type
+;_A                                  STATIC      1   variable
+;_RAM                                STATIC   2048   variable
+;_PC                                 STATIC      2   variable
+;P                                     IX-4      3   variable
+;op                                    IX-1      1   variable
+
+
+; Stack Frame Size: 10 (bytes)
+;       Spill Code: 0 (instruction)
+
+
+	XREF __irems:ROM
+	XREF __stoiu:ROM
+	XREF __frameset:ROM
+	XREF __setflag:ROM
+	XREF __icmpzero:ROM
+	XREF __case8:ROM
+	XREF __ishru_b:ROM
+	XDEF _cpuOp
+	XDEF _intr
+	XDEF _nmi_edge_detected
+	XDEF _nmi
+	XDEF _reset
+	XDEF _PC
+	XDEF _S
+	XDEF _Y
+	XDEF _X
+	XDEF _A
+	XDEF _clearRAM
+	XDEF _RAM
+	END
