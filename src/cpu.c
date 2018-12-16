@@ -13,7 +13,6 @@ void clearRAM(){
 	for (c = 0; c < 0x800; ++c) {
 		RAM[c] = (c & 4) ? 0xFF : 0x00;
 	}
-	return;
 }
 
 // Create registers
@@ -46,5 +45,4 @@ void cpuOp() {
             // Error in memory/ROM
             return;
     }
-	return;
 }

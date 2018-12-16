@@ -9,7 +9,7 @@
 #include "cpu.h"
 
 // Functions
-int clearRAM();
+void clearRAM();
 void cpuOp();
 
 #endif
