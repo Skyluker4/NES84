@@ -1,0 +1,6 @@
+# exclude everything except for source code and docs
+/*
+!.gitignore
+!/src
+!makefile
+!readme.md

@@ -16,7 +16,7 @@
 void main(void)
 {
 	// Clear the CPU's RAM
-	clearRam();
+	clearRAM();
 
 	// Main loop
 	while(true) {
