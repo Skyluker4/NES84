@@ -18,36 +18,41 @@ uint8_t RAM[0x800];
 
 // Create registers
 uint8_t A = 0, X = 0, Y = 0, S = 0xFD;
-uint16_t PC = 0;
 
 struct Flags {
-	bool carry:1;
-	bool zero:1;
-	bool interrupt:1;
-	bool decimal:1; // Probably can remove decimal flag
-	bool overflow:1;
-	bool negative:1;
+	// The compiler doesn't like the names without the prefixes apparently
+	bool f_carry:1;
+	bool f_zero:1;
+	bool f_interrupt:1;
+	bool f_decimal:1; // Probably can remove decimal flag
+	bool f_overflow:1;
+	bool f_negative:1;
 } P;
+
+uint16_t PC = 0;
 
 // Console status
 // Probably can put into a struct and/or reduce its size
 bool reset = true, nmi = false, nmi_edge_detected = false, intr = false;
 
-void cpuInit() {
-	// Set flags
-	P.interrupt = true;
-	
-	// Clear RAM
-	int c;
+void clearRAM(){
+	uint16_t c;
 	for (c = 0; c < 0x800; ++c) {
 		RAM[c] = (c & 4) ? 0xFF : 0x00;
 	}
 }
 
+void cpuInit() {
+	// Set flags
+	P.f_interrupt = true;
+
+	// Clear RAM - had to be a function becuase reasons??? (compiler threw an error for some reason)
+	clearRAM();
+}
 
 void cpuOp() {
     uint8_t op = RAM[PC++];
-	
+
     switch(op){
 		// 27 most frequently used opcodes at top
 		case 0xA5: // LDA zero-page
