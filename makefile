@@ -6,7 +6,7 @@
 # ----------------------------
 
 NAME        ?= NCES84
-COMPRESSED  ?= NO
+COMPRESSED  ?= YES
 ICON        ?= icon.png
 DESCRIPTION ?= "NES emulator for TI-84+ CE"
 
