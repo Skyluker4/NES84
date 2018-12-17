@@ -56,6 +56,9 @@ void cpuOp() {
     switch(op){
 		// 27 most frequently used opcodes at top
 		case 0xA5: // LDA zero-page
+			A = RAM[PC++];
+			P.f_zero = A == 0 ? true : false;
+			P.f_negative = A >> 7;
 			break;
 		case 0xD0: // BNE relative
 			break;
@@ -63,13 +66,13 @@ void cpuOp() {
 			break;
 		case 0xE8: // INX
 			break;
-		case 0x10: // BPL
+		case 0x10: // BPL relative
 			break;
 		case 0xC9: // CMP immediate
 			break;
 		case 0x30: // BMI relative
 			break;
-		case 0xF0: // BEQ
+		case 0xF0: // BEQ relative
 			break;
 		case 0x24: // BIT zero-page
 			break;
@@ -130,8 +133,6 @@ void cpuOp() {
 		case 0x0E: // ASL absolute
 			break;
 
-		case 0x10: // BPL relative
-			break;
 		case 0x11: // ORA indirect,Y
 			break;
 		case 0x15: // ORA zero-page,X
@@ -188,8 +189,6 @@ void cpuOp() {
 		case 0x48: // PHA
 			break;
 		case 0x49: // EOR immediate
-			break;
-		case 0x4C: // JMP absolute
 			break;
 		case 0x4D: // EOR absolute
 			break;
@@ -364,8 +363,6 @@ void cpuOp() {
 		case 0xEE: // INC absolute
 			break;
 
-		case 0xF0: // BEQ relative
-			break;
 		case 0xF1: // SBC indirect,Y
 			break;
 		case 0xF5: // SBC zero-page,X
