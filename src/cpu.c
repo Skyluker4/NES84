@@ -18,6 +18,7 @@ uint8_t RAM[0x800];
 
 // Create registers
 uint8_t A = 0, X = 0, Y = 0, S = 0xFD;
+#define STACK_ADDR 0x0100
 
 struct Flags {
 	// The compiler doesn't like the names without the prefixes apparently
@@ -29,28 +30,61 @@ struct Flags {
 	bool f_negative:1;
 } P;
 
-uint16_t PC = 0;
+uint16_t PC = 0xC000;
 
 // Console status
 // Probably can put into a struct and/or reduce its size
 bool reset = true, nmi = false, nmi_edge_detected = false, intr = false;
 
-void clearRAM(){
+void clearRAM(void) {
 	uint16_t c;
 	for (c = 0; c < 0x800; ++c) {
-		RAM[c] = (c & 4) ? 0xFF : 0x00;
+		RAM[c] = 0x00;
 	}
 }
 
-void cpuInit() {
+void cpuInit(void) {
 	// Set flags
 	P.f_interrupt = true;
 
-	// Clear RAM - had to be a function becuase reasons??? (compiler threw an error for some reason)
+	// Clear RAM - had to be a function because reasons??? (compiler threw an error for some reason)
 	clearRAM();
 }
 
-void cpuOp() {
+uint8_t zeropageXAddr(void) {
+	return PC++ + X;
+}
+
+uint16_t absoluteAddr(void) {
+	return RAM[PC++] + (RAM[PC++] << 8);
+}
+
+uint16_t absoluteXAddr(void) {
+	return absoluteAddr() + X;
+}
+
+uint16_t absoluteYAddr(void) {
+	return absoluteAddr() + Y;
+}
+
+uint16_t indirectXAddr(void){
+	return RAM[PC++ + X] + (RAM[PC++ + X] << 8);
+}
+
+uint16_t indirectYAddr(void) {
+	return RAM[PC++] + (RAM[PC++] << 8) + Y;
+}
+
+void pushWord(uint16_t word){
+	RAM[STACK_ADDR | S--] = word >> 8;
+	RAM[STACK_ADDR | S--] = word & 0x00FF;
+}
+
+uint16_t popWord(void){
+	return RAM[STACK_ADDR | S++] + (RAM[STACK_ADDR | S++] << 8);
+}
+
+void cpuOp(void) {
     uint8_t op = RAM[PC++];
 	uint8_t temp;
 
@@ -58,14 +92,14 @@ void cpuOp() {
 		// 27 most frequently used opcodes at top
 		case 0xA5: // LDA zero-page
 			A = RAM[PC++];
-			P.f_zero = A ? false : true;
+			P.f_zero = !A;
 			P.f_negative = A >> 7;
 			break;
 		case 0xD0: // BNE relative
 			if (!P.f_zero) PC += (int8_t)RAM[PC++];
 			break;
 		case 0x4C: // JMP absolute
-			PC = RAM[(uint16_t)(RAM[PC++] << 8 + RAM[PC++])];
+			PC = RAM[absoluteAddr()];
 			break;
 		case 0xE8: // INX
 			X++;
@@ -119,35 +153,56 @@ void cpuOp() {
 			if(P.f_carry) PC += RAM[PC++];
 			break;
 		case 0xBD: // LDA absolute,X
-			A = RAM[(uint16_t)(RAM[PC++] << 8 + RAM[PC++] + X)];
+			A = RAM[absoluteXAddr()];
 			P.f_zero = !A;
 			P.f_negative = A >> 7;
 			break;
 		case 0xB5: // LDA zero-page,X
-			A = RAM[RAM[PC++] + X];
+			A = RAM[zeropageXAddr()];
 			P.f_zero = !A;
 			P.f_negative = A >> 7;
 			break;
 		case 0xAD: // LDA absolute
-			A = RAM[PC++];
+			A = RAM[absoluteAddr()];
+			P.f_zero = !A;
+			P.f_negative = A >> 7;
 			break;
 		case 0x20: // JSR absolute
+			pushWord(PC);
+			PC = RAM[absoluteAddr()];
 			break;
 		case 0x4A: // LSR accumulator
+			P.f_carry = 0x01 & A;
+			A = A >> 1;
+			P.f_zero = A;
+			P.f_negative = false;
 			break;
 		case 0x60: // RTS
+			PC = popWord();
 			break;
 		case 0xB1: // LDA indirect,Y
+			A = RAM[indirectYAddr()];
+			P.f_zero = !A;
+			P.f_negative = A >> 7;
 			break;
 		case 0x29: // AND immediate
+			A = A & RAM[PC++];
+			P.f_zero = !A;
+			P.f_negative = A >> 7;
 			break;
 		case 0x9D: // STA absolute,X
+			RAM[absoluteXAddr()] = A;
 			break;
 		case 0x8D: // STA absolute
+			RAM[absoluteAddr()] = A;
 			break;
 		case 0x18: // CLC
+			P.f_carry = false;
 			break;
 		case 0xA9: // LDA immediate
+			A = RAM[PC++];
+			P.f_zero = !A;
+			P.f_negative = A >> 7;
 			break;
 
 		// Remaining opcodes sorted from lowest to highest temp
