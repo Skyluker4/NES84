@@ -6,7 +6,7 @@
 #include <keypadc.h>
 
 // Functions
-void cpuInit();
-void cpuOp();
+void cpuInit(void);
+void cpuOp(void);
 
 #endif
