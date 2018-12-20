@@ -52,47 +52,84 @@ void cpuInit() {
 
 void cpuOp() {
     uint8_t op = RAM[PC++];
+	uint8_t temp;
 
-    switch(op){
+	switch(op){
 		// 27 most frequently used opcodes at top
 		case 0xA5: // LDA zero-page
 			A = RAM[PC++];
-			P.f_zero = A == 0 ? true : false;
+			P.f_zero = A ? false : true;
 			P.f_negative = A >> 7;
 			break;
 		case 0xD0: // BNE relative
+			if (!P.f_zero) PC += (int8_t)RAM[PC++];
 			break;
 		case 0x4C: // JMP absolute
+			PC = RAM[(uint16_t)(RAM[PC++] << 8 + RAM[PC++])];
 			break;
 		case 0xE8: // INX
+			X++;
+			P.f_zero = !X;
+			P.f_negative = X >> 7;
 			break;
 		case 0x10: // BPL relative
+			if(!P.f_negative) PC += (int8_t)RAM[PC++];
 			break;
 		case 0xC9: // CMP immediate
+			PC = RAM[PC++];
 			break;
 		case 0x30: // BMI relative
+			if(P.f_negative) PC += (int8_t)RAM[PC++];
 			break;
 		case 0xF0: // BEQ relative
+			if(P.f_zero) PC += (int8_t)RAM[PC++];
 			break;
 		case 0x24: // BIT zero-page
+			temp = RAM[PC++];
+			P.f_negative = temp >> 7;
+			P.f_overflow = temp >> 6;
+			P.f_zero = A & temp ? false : true;
 			break;
 		case 0x85: // STA zero-page
+			RAM[PC++] = A;
 			break;
 		case 0x88: // DEY
+			Y--;
+			P.f_zero = !Y;
+			P.f_negative = Y >> 7;
 			break;
 		case 0xC8: // INY
+			Y++;
+			P.f_zero = !Y;
+			P.f_negative = Y >> 7;
 			break;
 		case 0xA8: // TAY
+			Y = A;
+			P.f_zero = !Y;
+			P.f_negative = Y >> 7;
 			break;
 		case 0xE6: // INC zero-page
+			temp = RAM[RAM[PC]];
+			temp++;
+			P.f_zero = !temp;
+			P.f_negative = temp >> 7;
+			RAM[RAM[PC++]] = temp;
 			break;
 		case 0xB0: // BCS relative
+			if(P.f_carry) PC += RAM[PC++];
 			break;
 		case 0xBD: // LDA absolute,X
+			A = RAM[(uint16_t)(RAM[PC++] << 8 + RAM[PC++] + X)];
+			P.f_zero = !A;
+			P.f_negative = A >> 7;
 			break;
 		case 0xB5: // LDA zero-page,X
+			A = RAM[RAM[PC++] + X];
+			P.f_zero = !A;
+			P.f_negative = A >> 7;
 			break;
 		case 0xAD: // LDA absolute
+			A = RAM[PC++];
 			break;
 		case 0x20: // JSR absolute
 			break;
@@ -113,7 +150,7 @@ void cpuOp() {
 		case 0xA9: // LDA immediate
 			break;
 
-		// Remaining opcodes sorted from lowest to highest value
+		// Remaining opcodes sorted from lowest to highest temp
 		case 0x00: // BRK
 			break;
 		case 0x01: // ORA indirect,X
@@ -177,7 +214,7 @@ void cpuOp() {
 			break;
 		case 0x3E: // ROL absolute,X
 			break;
-		
+
 		case 0x40: // RTI
 			break;
 		case 0x41: // EOR indirect,X
