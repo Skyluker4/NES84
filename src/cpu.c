@@ -1,26 +1,20 @@
 // System includes
 #include <tice.h>
-#include <keypadc.h>
-
-// Standard includes
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 // Project includes
 #include "cpu.h"
+#include "ppu.h"
+#include "apu.h"
+#include "rom.h"
 
-// Create RAM
-uint8_t RAM[0x800];
+uint8_t RAM[0x0800];
 
 // Create registers
 uint8_t A = 0, X = 0, Y = 0, S = 0xFD;
 #define STACK_ADDR 0x0100
 
-struct Flags {
+union Flags {
+	struct FlagsBool {
 	// The compiler doesn't like the names without the prefixes apparently
 	bool f_carry:1;
 	bool f_zero:1;
@@ -28,6 +22,8 @@ struct Flags {
 	bool f_decimal:1; // Probably can remove decimal flag
 	bool f_overflow:1;
 	bool f_negative:1;
+	} PBool;
+	uint8_t PByte;
 } P;
 
 uint16_t PC = 0xC000;
@@ -35,6 +31,30 @@ uint16_t PC = 0xC000;
 // Console status
 // Probably can put into a struct and/or reduce its size
 bool reset = true, nmi = false, nmi_edge_detected = false, intr = false;
+
+uint8_t readMem(uint16_t addr) {
+    if (addr <= 0x0800) return RAM[addr];
+    else if (addr <= 0x0FFF) return RAM[addr - 0x0FFF];
+    else if (addr <= 0x17FF) return RAM[addr - 0x17FF];
+    else if (addr <= 0x1FFF) return RAM[addr - 0x1FFF];
+    else if (addr <= 0x2007) return readPPU(addr);
+    else if (addr <= 0x3FFF) return readPPU(addr - 0x2007);
+    else if (addr <= 0x4017) return readAPU(addr);
+    else if (addr <= 0x401F) return -1; // Test mode not going to be implemented (yet)
+    else return ROM[addr];
+}
+
+void writeMem(uint16_t addr, uint8_t byte) {
+    if (addr <= 0x0800) RAM[addr] = byte;
+    else if (addr <= 0x0FFF) RAM[addr - 0x0FFF] = byte;
+    else if (addr <= 0x17FF) RAM[addr - 0x17FF] = byte;
+    else if (addr <= 0x1FFF) RAM[addr - 0x1FFF] = byte;
+    else if (addr <= 0x2007) writePPU(addr, byte);
+    else if (addr <= 0x3FFF) writePPU(addr - 0x2007, byte);
+    else if (addr <= 0x4017) writeAPU(addr, byte);
+    else if (addr <= 0x401F); // Test mode not going to be implemented (yet)
+    else ROM[addr] = byte;
+}
 
 void clearRAM(void) {
 	uint16_t c;
@@ -45,7 +65,7 @@ void clearRAM(void) {
 
 void cpuInit(void) {
 	// Set flags
-	P.f_interrupt = true;
+	P.PBool.f_interrupt = true;
 
 	// Clear RAM - had to be a function because reasons??? (compiler threw an error for some reason)
 	clearRAM();
@@ -56,7 +76,7 @@ uint8_t zeropageXAddr(void) {
 }
 
 uint16_t absoluteAddr(void) {
-	return RAM[PC++] + (RAM[PC++] << 8);
+	return readMem(PC++) + (readMem(PC++) << 8);
 }
 
 uint16_t absoluteXAddr(void) {
@@ -72,143 +92,160 @@ uint16_t indirectXAddr(void){
 }
 
 uint16_t indirectYAddr(void) {
-	return RAM[PC++] + (RAM[PC++] << 8) + Y;
+	return readMem(PC++) + (readMem(PC++) << 8) + Y;
 }
 
-void pushWord(uint16_t word){
-	RAM[STACK_ADDR | S--] = word >> 8;
-	RAM[STACK_ADDR | S--] = word & 0x00FF;
+void pushByte(uint8_t byte) {
+	RAM[STACK_ADDR | S--] = byte;
 }
 
-uint16_t popWord(void){
-	return RAM[STACK_ADDR | S++] + (RAM[STACK_ADDR | S++] << 8);
+void pushWord(uint16_t word) {
+	pushByte(word >> 8);
+	pushByte(word & 0x00FF);
+}
+
+uint8_t popByte(void) {
+	return RAM[STACK_ADDR | S++];
+}
+
+uint16_t popWord(void) {
+	return popByte() + (popByte() << 8);
+}
+
+uint16_t readWord(uint16_t addr){
+	return readMem(addr) + (readMem(addr) << 8);
 }
 
 void cpuOp(void) {
-    uint8_t op = RAM[PC++];
+    uint8_t op = readMem(PC++);
 	uint8_t temp;
 
 	switch(op){
 		// 27 most frequently used opcodes at top
 		case 0xA5: // LDA zero-page
-			A = RAM[PC++];
-			P.f_zero = !A;
-			P.f_negative = A >> 7;
+			A = readMem(PC++);
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0xD0: // BNE relative
-			if (!P.f_zero) PC += (int8_t)RAM[PC++];
+			if (!P.PBool.f_zero) PC += (int8_t)readMem(PC++);
 			break;
 		case 0x4C: // JMP absolute
-			PC = RAM[absoluteAddr()];
+			PC = readMem(absoluteAddr());
 			break;
 		case 0xE8: // INX
 			X++;
-			P.f_zero = !X;
-			P.f_negative = X >> 7;
+			P.PBool.f_zero = !X;
+			P.PBool.f_negative = X >> 7;
 			break;
 		case 0x10: // BPL relative
-			if(!P.f_negative) PC += (int8_t)RAM[PC++];
+			if(!P.PBool.f_negative) PC += (int8_t)readMem(PC++);
 			break;
 		case 0xC9: // CMP immediate
-			PC = RAM[PC++];
+			PC = readMem(PC++);
 			break;
 		case 0x30: // BMI relative
-			if(P.f_negative) PC += (int8_t)RAM[PC++];
+			if(P.PBool.f_negative) PC += (int8_t)readMem(PC++);
 			break;
 		case 0xF0: // BEQ relative
-			if(P.f_zero) PC += (int8_t)RAM[PC++];
+			if(P.PBool.f_zero) PC += (int8_t)readMem(PC++);
 			break;
 		case 0x24: // BIT zero-page
-			temp = RAM[PC++];
-			P.f_negative = temp >> 7;
-			P.f_overflow = temp >> 6;
-			P.f_zero = A & temp ? false : true;
+			temp = readMem(PC++);
+			P.PBool.f_negative = temp >> 7;
+			P.PBool.f_overflow = temp >> 6;
+			P.PBool.f_zero = A & temp ? false : true;
 			break;
 		case 0x85: // STA zero-page
-			RAM[PC++] = A;
+			writeMem(PC++, A);
 			break;
 		case 0x88: // DEY
 			Y--;
-			P.f_zero = !Y;
-			P.f_negative = Y >> 7;
+			P.PBool.f_zero = !Y;
+			P.PBool.f_negative = Y >> 7;
 			break;
 		case 0xC8: // INY
 			Y++;
-			P.f_zero = !Y;
-			P.f_negative = Y >> 7;
+			P.PBool.f_zero = !Y;
+			P.PBool.f_negative = Y >> 7;
 			break;
 		case 0xA8: // TAY
 			Y = A;
-			P.f_zero = !Y;
-			P.f_negative = Y >> 7;
+			P.PBool.f_zero = !Y;
+			P.PBool.f_negative = Y >> 7;
 			break;
 		case 0xE6: // INC zero-page
-			temp = RAM[RAM[PC]];
+			temp = readMem(readMem(PC));
 			temp++;
-			P.f_zero = !temp;
-			P.f_negative = temp >> 7;
-			RAM[RAM[PC++]] = temp;
+			P.PBool.f_zero = !temp;
+			P.PBool.f_negative = temp >> 7;
+			writeMem(readMem(PC++), temp);
 			break;
 		case 0xB0: // BCS relative
-			if(P.f_carry) PC += RAM[PC++];
+			if(P.PBool.f_carry) PC += readMem(PC++);
 			break;
 		case 0xBD: // LDA absolute,X
-			A = RAM[absoluteXAddr()];
-			P.f_zero = !A;
-			P.f_negative = A >> 7;
+			A = readMem(absoluteXAddr());
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0xB5: // LDA zero-page,X
-			A = RAM[zeropageXAddr()];
-			P.f_zero = !A;
-			P.f_negative = A >> 7;
+			A = readMem(zeropageXAddr());
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0xAD: // LDA absolute
-			A = RAM[absoluteAddr()];
-			P.f_zero = !A;
-			P.f_negative = A >> 7;
+			A = readMem(absoluteAddr());
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0x20: // JSR absolute
 			pushWord(PC);
-			PC = RAM[absoluteAddr()];
+			PC = readMem(absoluteAddr());
 			break;
 		case 0x4A: // LSR accumulator
-			P.f_carry = 0x01 & A;
+			P.PBool.f_carry = 0x01 & A;
 			A = A >> 1;
-			P.f_zero = A;
-			P.f_negative = false;
+			P.PBool.f_zero = A;
+			P.PBool.f_negative = false;
 			break;
 		case 0x60: // RTS
 			PC = popWord();
 			break;
 		case 0xB1: // LDA indirect,Y
-			A = RAM[indirectYAddr()];
-			P.f_zero = !A;
-			P.f_negative = A >> 7;
+			A = readMem(indirectYAddr());
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0x29: // AND immediate
-			A = A & RAM[PC++];
-			P.f_zero = !A;
-			P.f_negative = A >> 7;
+			A = A & readMem(PC++);
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0x9D: // STA absolute,X
-			RAM[absoluteXAddr()] = A;
+			writeMem(absoluteXAddr(), A);
 			break;
 		case 0x8D: // STA absolute
-			RAM[absoluteAddr()] = A;
+			writeMem(absoluteAddr(), A);
 			break;
 		case 0x18: // CLC
-			P.f_carry = false;
+			P.PBool.f_carry = false;
 			break;
 		case 0xA9: // LDA immediate
-			A = RAM[PC++];
-			P.f_zero = !A;
-			P.f_negative = A >> 7;
+			A = readMem(PC++);
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 
 		// Remaining opcodes sorted from lowest to highest temp
 		case 0x00: // BRK
+			pushWord(PC);
+			pushByte(P.PByte);
+			PC = readWord(0xFFFE);
+			P.PBool.f_interrupt = true;
 			break;
 		case 0x01: // ORA indirect,X
+
 			break;
 		case 0x05: // ORA zero-page
 			break;
@@ -471,7 +508,7 @@ void cpuOp(void) {
 			break;
 
         default: // Error in memory/ROM
-			// Output some kind of error here and end execution
+			// TODO: Output an error here and end execution
             return;
     }
 }
