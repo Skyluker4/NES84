@@ -32,6 +32,7 @@ uint16_t PC = 0xC000;
 // Probably can put into a struct and/or reduce its size
 bool reset = true, nmi = false, nmi_edge_detected = false, intr = false;
 
+// Memory Stuff
 uint8_t readMem(uint16_t addr) {
     if (addr <= 0x0800) return RAM[addr];
     else if (addr <= 0x0FFF) return RAM[addr - 0x0FFF];
@@ -124,17 +125,72 @@ uint16_t readWord(uint16_t addr){
 	return readMem(addr) + (readMem(addr) << 8);
 }
 
+// Operations
+void ORA(uint16_t addr) {
+	A = A | readMem(addr);
+	P.PBool.f_zero = !A;
+	P.PBool.f_negative = A >> 7;
+}
+
+void LDA(uint16_t addr) {
+	A = readMem(addr);
+	P.PBool.f_zero = !A;
+	P.PBool.f_negative = A >> 7;
+}
+
+void CMP(uint16_t addr) {
+	uint8_t temp = A - readMem(addr);
+	P.PBool.f_carry = A >= temp;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+}
+
+void BIT(uint16_t addr) {
+	uint8_t temp = readMem(zeropageAddr());
+	P.PBool.f_negative = temp >> 7;
+	P.PBool.f_overflow = temp >> 6;
+	P.PBool.f_zero = A & temp ? false : true;
+}
+
+void INC(uint16_t addr) {
+	uint8_t temp = readMem(addr);
+	temp++;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+	writeMem(addr, temp);
+}
+
+void LSR(uint16_t addr) {
+	uint8_t temp = readMem(addr);
+	P.PBool.f_carry = temp & 1;
+	temp = temp >> 1;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = false;
+	writeMem(addr, temp);
+}
+
+void AND(uint16_t addr) {
+	A = A & readMem(addr);
+	P.PBool.f_zero = !A;
+	P.PBool.f_negative = A >> 7;
+}
+
+void ASL(uint16_t addr) {
+	uint8_t temp = readMem(addr);
+	P.PBool.f_carry = temp >> 7;
+	temp = temp << 1;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+	writeMem(addr, temp);
+}
+
 void cpuOp(void) {
     uint8_t op = readMem(PC++);
-	uint8_t temp;
-	uint16_t tempAddr;
 
 	switch(op){
 		// 27 most frequently used opcodes at top
 		case 0xA5: // LDA zero-page
-			A = readMem(zeropageAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			LDA(zeropageAddr());
 			break;
 		case 0xD0: // BNE relative
 			if (!P.PBool.f_zero) PC += (int8_t)readMem(PC++);
@@ -151,7 +207,7 @@ void cpuOp(void) {
 			if(!P.PBool.f_negative) PC += (int8_t)readMem(PC++);
 			break;
 		case 0xC9: // CMP immediate
-			PC = readMem(PC++);
+			CMP(PC++);
 			break;
 		case 0x30: // BMI relative
 			if(P.PBool.f_negative) PC += (int8_t)readMem(PC++);
@@ -160,10 +216,7 @@ void cpuOp(void) {
 			if(P.PBool.f_zero) PC += (int8_t)readMem(PC++);
 			break;
 		case 0x24: // BIT zero-page
-			temp = readMem(zeropageAddr());
-			P.PBool.f_negative = temp >> 7;
-			P.PBool.f_overflow = temp >> 6;
-			P.PBool.f_zero = A & temp ? false : true;
+			BIT(zeropageAddr());
 			break;
 		case 0x85: // STA zero-page
 			writeMem(PC++, A);
@@ -184,30 +237,19 @@ void cpuOp(void) {
 			P.PBool.f_negative = Y >> 7;
 			break;
 		case 0xE6: // INC zero-page
-			tempAddr = zeropageAddr();
-			temp = readMem(tempAddr);
-			temp++;
-			P.PBool.f_zero = !temp;
-			P.PBool.f_negative = temp >> 7;
-			writeMem(tempAddr, temp);
+			INC(zeropageAddr());
 			break;
 		case 0xB0: // BCS relative
 			if(P.PBool.f_carry) PC += readMem(PC++);
 			break;
 		case 0xBD: // LDA absolute,X
-			A = readMem(absoluteXAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			LDA(absoluteXAddr());
 			break;
 		case 0xB5: // LDA zero-page,X
-			A = readMem(zeropageXAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			LDA(zeropageXAddr());
 			break;
 		case 0xAD: // LDA absolute
-			A = readMem(absoluteAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			LDA(absoluteAddr());
 			break;
 		case 0x20: // JSR absolute
 			pushWord(PC);
@@ -223,14 +265,10 @@ void cpuOp(void) {
 			PC = popWord();
 			break;
 		case 0xB1: // LDA indirect,Y
-			A = readMem(indirectYAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			LDA(indirectYAddr());
 			break;
 		case 0x29: // AND immediate
-			A = A & readMem(PC++);
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			AND(PC++);
 			break;
 		case 0x9D: // STA absolute,X
 			writeMem(absoluteXAddr(), A);
@@ -242,9 +280,7 @@ void cpuOp(void) {
 			P.PBool.f_carry = false;
 			break;
 		case 0xA9: // LDA immediate
-			A = readMem(PC++);
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			LDA(PC++);
 			break;
 
 		// Remaining opcodes sorted from lowest to highest temp
@@ -255,31 +291,19 @@ void cpuOp(void) {
 			P.PBool.f_interrupt = true;
 			break;
 		case 0x01: // ORA indirect,X
-			A = readMem(indirectXAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			ORA(indirectXAddr());
 			break;
 		case 0x05: // ORA zero-page
-			A = readMem(zeropageAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			ORA(zeropageAddr());
 			break;
 		case 0x06: // ASL zero-page
-			tempAddr = zeropageAddr();
-			temp = readMem(tempAddr);
-			P.PBool.f_carry = temp >> 7;
-			temp = temp << 1;
-			P.PBool.f_zero = !temp;
-			P.PBool.f_negative = temp >> 7;
-			writeMem(tempAddr, temp);
+			ASL(zeropageAddr());
 			break;
 		case 0x08: // PHP
 			pushByte(P.PByte);
 			break;
 		case 0x09: // ORA immediate
-			A = A | readMem(PC++);
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			ORA(PC++);
 			break;
 		case 0x0A: // ASL accumulator
 			P.PBool.f_carry = A >> 7;
@@ -288,37 +312,29 @@ void cpuOp(void) {
 			P.PBool.f_negative = A >> 7;
 			break;
 		case 0x0D: // ORA absolute
-			A = A | readMem(absoluteAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			ORA(absoluteAddr());
 			break;
 		case 0x0E: // ASL absolute
-			tempAddr = absoluteAddr();
-			temp = readMem(tempAddr);
-			P.PBool.f_carry = temp >> 7;
-			temp = temp << 1;
-			P.PBool.f_zero = !temp;
-			P.PBool.f_negative = temp >> 7;
-			writeMem(tempAddr, temp);
+			ASL(absoluteAddr());
 			break;
 
 		case 0x11: // ORA indirect,Y
-			A = A | readMem(indirectYAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			ORA(indirectYAddr());
 			break;
 		case 0x15: // ORA zero-page,X
-			A = A | readMem(zeropageXAddr());
-			P.PBool.f_zero = !A;
-			P.PBool.f_negative = A >> 7;
+			ORA(zeropageXAddr());
 			break;
 		case 0x16: // ASL zero-page,X
+			ASL(zeropageXAddr());
 			break;
 		case 0x19: // ORA absolute,Y
+			ORA(absoluteYAddr());
 			break;
 		case 0x1D: // ORA absolute,X
+			ORA(absoluteXAddr());
 			break;
 		case 0x1E: // ASL absolute,X
+			ASL(absoluteXAddr());
 			break;
 
 		case 0x21: // AND indirect,X
