@@ -184,10 +184,22 @@ void ASL(uint16_t addr) {
 	writeMem(addr, temp);
 }
 
+void ROL(uint16_t addr) {
+	uint8_t temp = readMem(addr);
+	bool carryTemp = temp >> 7;
+	temp = temp << 1;
+	temp += P.PBool.f_carry;
+	P.PBool.f_carry = carryTemp;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+	writeMem(addr, temp);
+}
+
+// Execute operations
 void cpuOp(void) {
     uint8_t op = readMem(PC++);
 
-	switch(op){
+	switch(op) {
 		// 27 most frequently used opcodes at top
 		case 0xA5: // LDA zero-page
 			LDA(zeropageAddr());
@@ -338,40 +350,65 @@ void cpuOp(void) {
 			break;
 
 		case 0x21: // AND indirect,X
+			AND(indirectXAddr());
 			break;
 		case 0x25: // AND zero-page
+			AND(zeropageAddr());
 			break;
 		case 0x26: // ROL zero-page
+			ROL(zeropageAddr());
 			break;
 		case 0x28: // PLP
+			P.PByte = popByte();
 			break;
 		case 0x2A: // ROL accumulator
+		{
+			bool carryTemp = A >> 7;
+			A = A << 1;
+			A += P.PBool.f_carry;
+			P.PBool.f_carry = carryTemp;
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
+		}
 		case 0x2C: // BIT absolute
+			BIT(absoluteAddr());
 			break;
 		case 0x2D: // AND absolute
+			AND(absoluteAddr());
 			break;
 		case 0x2E: // ROL absolute
+			ROL(absoluteAddr());
 			break;
 
 		case 0x31: // AND indirect,Y
+			AND(indirectYAddr());
 			break;
 		case 0x35: // AND zero-page,X
+			AND(zeropageXAddr());
 			break;
 		case 0x36: // ROL zero-page,X
+			ROL(zeropageXAddr());
 			break;
 		case 0x38: // SEC
+			P.PBool.f_carry = true;
 			break;
 		case 0x39: // AND absolute,Y
+			AND(absoluteYAddr());
 			break;
 		case 0x3D: // AND absolute,X
+			AND(absoluteXAddr());
 			break;
 		case 0x3E: // ROL absolute,X
+			ROL(absoluteXAddr());
 			break;
 
 		case 0x40: // RTI
+			P.PByte = popByte();
+			PC = popWord();
 			break;
 		case 0x41: // EOR indirect,X
+
 			break;
 		case 0x45: // EOR zero-page
 			break;
