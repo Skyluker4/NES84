@@ -195,6 +195,71 @@ void ROL(uint16_t addr) {
 	writeMem(addr, temp);
 }
 
+void EOR(uint16_t addr) {
+	A = A ^ readMem(addr);
+	P.PBool.f_zero = !A;
+	P.PBool.f_negative = A >> 7;
+}
+
+void ADC(uint16_t addr) {
+	uint16_t temp = A + readMem(addr) + P.PBool.f_carry;
+	P.PBool.f_overflow = temp >> 8;
+	A = temp;
+	P.PBool.f_zero = !A;
+	P.PBool.f_negative = A >> 7;
+}
+
+void ROR(uint16_t addr) {
+	uint8_t temp = readMem(addr);
+	bool carryTemp = P.PBool.f_carry;
+	P.PBool.f_carry = temp & 1;
+	temp = (temp >> 1) + (carryTemp << 7);
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+	writeMem(addr, temp);
+}
+
+void LDY(uint16_t addr) {
+	Y = readMem(addr);
+	P.PBool.f_zero = !Y;
+	P.PBool.f_negative = Y >> 7;
+}
+
+void LDX(uint16_t addr) {
+	X = readMem(addr);
+	P.PBool.f_zero = !X;
+	P.PBool.f_negative = Y >> X;
+}
+
+void CPY(uint16_t addr) {
+	uint8_t temp = Y - readMem(addr);
+	P.PBool.f_carry = Y >= temp;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+}
+
+void DEC(uint16_t addr) {
+	uint8_t temp = readMem(addr) - 1;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+	writeMem(addr, temp);
+}
+
+void CPX(uint16_t addr) {
+	uint8_t temp = X - readMem(addr);
+	P.PBool.f_carry = X >= temp;
+	P.PBool.f_zero = !temp;
+	P.PBool.f_negative = temp >> 7;
+}
+
+void SBC(uint16_t addr) {
+	uint16_t temp = A - readMem(addr) - !P.PBool.f_carry;
+	P.PBool.f_carry = temp >> 8;
+	A = temp;
+	P.PBool.f_zero = !A;
+	P.PBool.f_negative = A >> 7;
+}
+
 // Execute operations
 void cpuOp(void) {
     uint8_t op = readMem(PC++);
@@ -408,205 +473,314 @@ void cpuOp(void) {
 			PC = popWord();
 			break;
 		case 0x41: // EOR indirect,X
-
+			EOR(indirectXAddr());
 			break;
 		case 0x45: // EOR zero-page
+			EOR(zeropageAddr());
 			break;
 		case 0x46: // LSR zero-page
+			LSR(zeropageAddr());
 			break;
 		case 0x48: // PHA
+			pushByte(A);
 			break;
 		case 0x49: // EOR immediate
+			EOR(PC++);
 			break;
 		case 0x4D: // EOR absolute
+			EOR(absoluteAddr());
 			break;
 		case 0x4E: // LSR absolute
+			LSR(absoluteAddr());
 			break;
 
 		case 0x50: // BVC relative
+			if (!P.PBool.f_overflow) PC += (int8_t)readMem(PC++);
 			break;
 		case 0x51: // EOR indirect,Y
+			EOR(indirectYAddr());
 			break;
 		case 0x55: // EOR zero-page,X
+			EOR(zeropageXAddr());
 			break;
 		case 0x56: // LSR zero-page,X
+			LSR(zeropageXAddr());
 			break;
 		case 0x58: // CLI
+			P.PBool.f_interrupt = false;
 			break;
 		case 0x59: // EOR absolute,Y
+			EOR(absoluteYAddr());
 			break;
 		case 0x5D: // EOR absolute,X
+			EOR(absoluteXAddr());
 			break;
 		case 0x5E: // LSR absolute,X
+			LSR(absoluteXAddr());
 			break;
 
 		case 0x61: // ADC indirect,X
+			ADC(indirectXAddr());
 			break;
 		case 0x65: // ADC zero-page
+			ADC(zeropageAddr());
 			break;
 		case 0x66: // ROR zero-page
+			ROR(zeropageAddr());
 			break;
 		case 0x68: // PLA
+			A = popByte();
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0x69: // ADC immediate
+			ADC(PC++);
 			break;
 		case 0x6A: // ROR accumulator
+		{
+			bool carryTemp = P.PBool.f_carry;
+			P.PBool.f_carry = A & 1;
+			A = (A >> 1) + (carryTemp << 7);
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
+		}
 		case 0x6C: // JMP indirect
+			PC = readWord(absoluteAddr());
 			break;
 		case 0x6D: // ADC absolute
+			ADC(absoluteAddr());
 			break;
 		case 0x6E: // ROR absolute
+			ROR(absoluteAddr());
 			break;
 
 		case 0x70: // BVS relative
+			if (P.PBool.f_overflow) PC += (int8_t)readMem(PC++);
 			break;
 		case 0x71: // ADC indirect,Y
+			ADC(indirectYAddr());
 			break;
 		case 0x75: // ADC zero-page,X
+			ADC(zeropageXAddr());
 			break;
 		case 0x76: // ROR zero-page,X
+			ROR(zeropageXAddr());
 			break;
 		case 0x78: // SEI
+			P.PBool.f_interrupt = true;
 			break;
 		case 0x79: // ADC absolute,Y
+			ADC(absoluteYAddr());
 			break;
 		case 0x7D: // ADC absolute,X
+			ADC(absoluteXAddr());
 			break;
 		case 0x7E: // ROR absolute,X
+			ROR(absoluteXAddr());
 			break;
 
 		case 0x81: // STA indirect,X
+			writeMem(indirectXAddr(), A);
 			break;
 		case 0x84: // STY zero-page
+			writeMem(zeropageAddr(), Y);
 			break;
 		case 0x86: // STX zero-page
+			writeMem(zeropageAddr(), X);
 			break;
 		case 0x8A: // TXA
+			A = X;
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0x8C: // STY absolute
+			writeMem(absoluteAddr(), Y);
 			break;
 		case 0x8E: // STX absolute
+			writeMem(absoluteAddr(), X);
 			break;
 
 		case 0x90: // BCC relative
+			if (!P.PBool.f_carry) PC += (int8_t)readMem(PC++);
 			break;
 		case 0x91: // STA indirect,Y
+			writeMem(indirectYAddr(), A);
 			break;
 		case 0x94: // STY zero-page,X
+			writeMem(zeropageXAddr(), Y);
 			break;
 		case 0x95: // STA zero-page,X
+			writeMem(zeropageXAddr(), A);
 			break;
 		case 0x96: // STX zero-page,Y
+			writeMem(zeropageYAddr(), X);
 			break;
 		case 0x98: // TYA
+			A = Y;
+			P.PBool.f_zero = !A;
+			P.PBool.f_negative = A >> 7;
 			break;
 		case 0x99: // STA absolute,Y
+			writeMem(absoluteYAddr(), A);
 			break;
 		case 0x9A: // TXS
+			S = X;
 			break;
 
 		case 0xA0: // LDY immediate
+			LDY(PC++);
 			break;
 		case 0xA1: // LDA indirect,X
+			LDA(indirectXAddr());
 			break;
 		case 0xA2: // LDX immediate
+			LDX(PC++);
 			break;
 		case 0xA4: // LDY zero-page
+			LDY(zeropageAddr());
 			break;
 		case 0xA6: // LDX zero-page
+			LDX(zeropageAddr());
 			break;
 		case 0xAA: // TAX
+			X = A;
+			P.PBool.f_zero = !X;
+			P.PBool.f_negative = X >> 7;
 			break;
 		case 0xAC: // LDY absolute
+			LDY(absoluteAddr());
 			break;
 		case 0xAE: // LDX absolute
+			LDX(absoluteAddr());
 			break;
 
 		case 0xB4: // LDY zero-page,X
+			LDY(zeropageXAddr());
 			break;
 		case 0xB6: // LDX zero-page,Y
+			LDX(zeropageYAddr());
 			break;
 		case 0xB8: // CLV
+			P.PBool.f_overflow = false;
 			break;
 		case 0xB9: // LDA absolute,Y
+			LDA(absoluteYAddr());
 			break;
 		case 0xBA: // TSX
+			X = S;
+			P.PBool.f_zero = !X;
+			P.PBool.f_negative = X >> 7;
 			break;
 		case 0xBC: // LDY absolute,X
+			LDY(absoluteXAddr());
 			break;
 		case 0xBE: // LDX absolute,Y
+			LDX(absoluteYAddr());
 			break;
 
 		case 0xC0: // CPY immediate
+			CPY(PC++);
 			break;
 		case 0xC1: // CMP indirect,X
+			CMP(indirectXAddr());
 			break;
 		case 0xC4: // CPY zero-page
+			CPY(zeropageAddr());
 			break;
 		case 0xC5: // CMP zero-page
+			CMP(zeropageAddr());
 			break;
 		case 0xC6: // DEC zero-page
+			DEC(zeropageAddr());
 			break;
 		case 0xCA: // DEX
+			X--;
+			P.PBool.f_zero = !X;
+			P.PBool.f_negative = X >> 7;
 			break;
 		case 0xCC: // CPY absolute
+			CPY(absoluteAddr());
 			break;
 		case 0xCD: // CMP absolute
+			CMP(absoluteAddr());
 			break;
 		case 0xCE: // DEC absolute
+			DEC(absoluteAddr());
 			break;
 
 		case 0xD1: // CMP indirect,Y
+			CMP(indirectYAddr());
 			break;
-		case 0xD5: // zero-page,X
+		case 0xD5: // CMP zero-page,X
+			CMP(zeropageXAddr());
 			break;
 		case 0xD6: // DEC zero-page,X
+			DEC(zeropageXAddr());
 			break;
 		case 0xD8: // CLD
+			P.PBool.f_decimal = false;
 			break;
 		case 0xD9: // CMP absolute,Y
+			CMP(absoluteYAddr());
 			break;
 		case 0xDD: // CMP absolute,X
+			CMP(absoluteXAddr());
 			break;
 		case 0xDE: // DEC absolute,X
+			DEC(absoluteXAddr());
 			break;
 
 		case 0xE0: // CPX immediate
+			CPX(PC++);
 			break;
 		case 0xE1: // SBC indirect,X
+			SBC(indirectXAddr());
 			break;
 		case 0xE4: // CPX zero-page
+			CPX(zeropageAddr());
 			break;
 		case 0xE5: // SBC zero-page
+			SBC(zeropageAddr());
 			break;
 		case 0xE9: // SBC immediate
-			break;
-		case 0xEA: // NOP
+			SBC(PC++);
 			break;
 		case 0xEC: // CPX absolute
+			CPX(absoluteAddr());
 			break;
 		case 0xED: // SBC absolute
+			SBC(absoluteAddr());
 			break;
 		case 0xEE: // INC absolute
+			INC(absoluteAddr());
 			break;
 
 		case 0xF1: // SBC indirect,Y
+			SBC(indirectYAddr());
 			break;
 		case 0xF5: // SBC zero-page,X
+			SBC(zeropageXAddr());
 			break;
 		case 0xF6: // INC zero-page,X
+			INC(zeropageXAddr());
 			break;
 		case 0xF8: // SED
+			P.PBool.f_decimal = true;
 			break;
 		case 0xF9: // SBC absolute,Y
+			SBC(absoluteYAddr());
 			break;
 		case 0xFD: // SBC absolute,X
+			SBC(absoluteXAddr());
 			break;
 		case 0xFE: // INC absolute,X
+			INC(absoluteXAddr());
 			break;
-
-        default: // Error in memory/ROM
+		// NOP at the bottom since it doesn't do anything
+		case 0xEA: // NOP
+			break;
+		default: // Error in memory/ROM
 			// TODO: Output an error here and end execution
             return;
     }
