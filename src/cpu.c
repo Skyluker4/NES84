@@ -146,7 +146,7 @@ void CMP(uint16_t addr) {
 }
 
 void BIT(uint16_t addr) {
-	uint8_t temp = readMem(zeropageAddr());
+	uint8_t temp = readMem(addr);
 	P.PBool.f_negative = temp >> 7;
 	P.PBool.f_overflow = temp >> 6;
 	P.PBool.f_zero = A & temp ? false : true;
@@ -187,8 +187,7 @@ void ASL(uint16_t addr) {
 void ROL(uint16_t addr) {
 	uint8_t temp = readMem(addr);
 	bool carryTemp = temp >> 7;
-	temp = temp << 1;
-	temp += P.PBool.f_carry;
+	temp = (temp << 1) + P.PBool.f_carry;
 	P.PBool.f_carry = carryTemp;
 	P.PBool.f_zero = !temp;
 	P.PBool.f_negative = temp >> 7;
