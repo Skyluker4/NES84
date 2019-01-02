@@ -34,15 +34,15 @@ bool reset = true, nmi = false, nmi_edge_detected = false, intr = false;
 
 // Memory Stuff
 uint8_t readMem(uint16_t addr) {
-    if (addr <= 0x0800) return RAM[addr];
-    else if (addr <= 0x0FFF) return RAM[addr - 0x0FFF];
-    else if (addr <= 0x17FF) return RAM[addr - 0x17FF];
-    else if (addr <= 0x1FFF) return RAM[addr - 0x1FFF];
-    else if (addr <= 0x2007) return readPPU(addr);
-    else if (addr <= 0x3FFF) return readPPU(addr - 0x2007); // TODO: Make this actually accurate
-    else if (addr <= 0x4017) return readAPU(addr);
+    if (addr <= 0x07FF) return RAM[addr];
+    else if (addr <= 0x0FFF) return RAM[addr - 0x0800];
+    else if (addr <= 0x17FF) return RAM[addr - 0x1000];
+    else if (addr <= 0x1FFF) return RAM[addr - 0x1800];
+    else if (addr <= 0x2007) return readPPU(addr - 0x2000);
+    else if (addr <= 0x3FFF) return readPPU((addr - 0x2008) % 8);
+    else if (addr <= 0x4017) return readAPU(addr - 0x4000);
     else if (addr <= 0x401F) return -1; // Test mode not going to be implemented (yet)
-    else return ROM[addr];
+    else return ROM[addr - 0x4020];
 }
 
 void writeMem(uint16_t addr, uint8_t byte) {
@@ -50,11 +50,11 @@ void writeMem(uint16_t addr, uint8_t byte) {
     else if (addr <= 0x0FFF) RAM[addr - 0x0FFF] = byte;
     else if (addr <= 0x17FF) RAM[addr - 0x17FF] = byte;
     else if (addr <= 0x1FFF) RAM[addr - 0x1FFF] = byte;
-    else if (addr <= 0x2007) writePPU(addr, byte);
-    else if (addr <= 0x3FFF) writePPU(addr - 0x2007, byte);
-    else if (addr <= 0x4017) writeAPU(addr, byte);
+    else if (addr <= 0x2007) writePPU(addr - 0x2007, byte);
+    else if (addr <= 0x3FFF) writePPU(addr - 0x3FFF, byte);
+    else if (addr <= 0x4017) writeAPU(addr - 0x4017, byte);
     else if (addr <= 0x401F); // Test mode not going to be implemented (yet)
-    else ROM[addr] = byte;
+    else ROM[addr - 0x4020] = byte;
 }
 
 void clearRAM(void) {
@@ -85,7 +85,8 @@ uint8_t zeropageYAddr(void) {
 }
 
 uint16_t absoluteAddr(void) {
-	return readMem(PC++) + (readMem(PC++) << 8);
+	uint8_t temp = readMem(PC++);
+	return (temp | (readMem(PC++)) << 8);
 }
 
 uint16_t absoluteXAddr(void) {
@@ -97,11 +98,13 @@ uint16_t absoluteYAddr(void) {
 }
 
 uint16_t indirectXAddr(void){
-	return RAM[PC++ + X] + (RAM[PC++ + X] << 8);
+	uint8_t temp = readMem(PC++);
+	return (temp | (readMem(PC++)) << 8) + X;
 }
 
 uint16_t indirectYAddr(void) {
-	return readMem(PC++) + (readMem(PC++) << 8) + Y;
+	uint8_t temp = readMem(PC++);
+	return (temp | (readMem(PC++)) << 8) + Y;
 }
 
 void pushByte(uint8_t byte) {
@@ -118,11 +121,12 @@ uint8_t popByte(void) {
 }
 
 uint16_t popWord(void) {
-	return popByte() + (popByte() << 8);
+	uint16_t temp = popByte();
+	return temp + (popByte() << 8);
 }
 
-uint16_t readWord(uint16_t addr){
-	return readMem(addr) + (readMem(addr) << 8);
+uint16_t readWord(uint16_t addr) {
+	return readMem(addr) + (readMem(addr + 0x0001) << 8);
 }
 
 // Operations
@@ -148,7 +152,7 @@ void CMP(uint16_t addr) {
 void BIT(uint16_t addr) {
 	uint8_t temp = readMem(addr);
 	P.PBool.f_negative = temp >> 7;
-	P.PBool.f_overflow = temp >> 6;
+	P.PBool.f_overflow = (temp >> 6) & 1;
 	P.PBool.f_zero = A & temp ? false : true;
 }
 
@@ -187,7 +191,7 @@ void ASL(uint16_t addr) {
 void ROL(uint16_t addr) {
 	uint8_t temp = readMem(addr);
 	bool carryTemp = temp >> 7;
-	temp = (temp << 1) + P.PBool.f_carry;
+	temp = (temp << 1) | P.PBool.f_carry;
 	P.PBool.f_carry = carryTemp;
 	P.PBool.f_zero = !temp;
 	P.PBool.f_negative = temp >> 7;
@@ -212,7 +216,7 @@ void ROR(uint16_t addr) {
 	uint8_t temp = readMem(addr);
 	bool carryTemp = P.PBool.f_carry;
 	P.PBool.f_carry = temp & 1;
-	temp = (temp >> 1) + (carryTemp << 7);
+	temp = (temp >> 1) | (carryTemp << 7);
 	P.PBool.f_zero = !temp;
 	P.PBool.f_negative = temp >> 7;
 	writeMem(addr, temp);
@@ -539,7 +543,7 @@ void cpuOp(void) {
 		{
 			bool carryTemp = P.PBool.f_carry;
 			P.PBool.f_carry = A & 1;
-			A = (A >> 1) + (carryTemp << 7);
+			A = (A >> 1) | (carryTemp << 7);
 			P.PBool.f_zero = !A;
 			P.PBool.f_negative = A >> 7;
 			break;
