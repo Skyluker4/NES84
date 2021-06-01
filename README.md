@@ -2,7 +2,7 @@
 
 NES emulator for the TI-84+ CE.
 
-Currently in development.
+In development, but not currently being actively worked on.
 
 ## Releases
 
@@ -20,4 +20,4 @@ All necessary source files are in the src/ folder. The CPU, PPU, APU, ROM, and i
 
 ## Building
 
-Requires the [CE C Software Development Kit](https://github.com/CE-Programming/toolchain/releases/latest). Build using make.
+Requires the [CE C Software Development Kit](https://github.com/CE-Programming/toolchain/releases/latest). Build using ```make```.
